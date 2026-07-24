@@ -11,6 +11,7 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   OAuthCallback:
     "Discord returned an invalid sign-in response. Please try again.",
   OAuthSignin: "Discord sign-in could not be started. Please try again.",
+  SessionExpired: "Your session is no longer linked to your study profile. Sign in with Discord again.",
   SessionRequired: "Please sign in to continue.",
   Verification: "The sign-in verification request expired. Please try again.",
 };

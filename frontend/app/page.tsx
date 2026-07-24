@@ -16,8 +16,9 @@ export default async function HomePage({
   const errorCode = typeof params.error === "string" ? params.error : null;
   const authError = getAuthErrorMessage(errorCode);
   const isDeactivated = session?.user?.status === "deactivated";
+  const hasSessionError = errorCode === "SessionExpired";
 
-  if (session?.backendToken && !isDeactivated) {
+  if (session?.backendToken && !isDeactivated && !hasSessionError) {
     redirect("/dashboard");
   }
 

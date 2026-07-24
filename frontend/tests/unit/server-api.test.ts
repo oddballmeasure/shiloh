@@ -8,7 +8,9 @@ vi.mock("@/auth", () => ({
   auth: vi.fn(),
 }));
 
-import { backendFetch } from "@/lib/server-api";
+import { auth } from "@/auth";
+import { backendFetch, requireSession } from "@/lib/server-api";
+import { redirect } from "next/navigation";
 
 describe("server-api", () => {
   beforeEach(() => {
@@ -63,5 +65,28 @@ describe("server-api", () => {
       message: "Unable to reach the backend service. Please try again shortly.",
       status: 503,
     });
+  });
+
+  it("redirects stale backend sessions to a readable sign-in state", async () => {
+    vi.mocked(redirect).mockImplementation(() => {
+      throw new Error("redirect");
+    });
+    vi.mocked(auth).mockResolvedValue({
+      backendToken: "stale-token",
+      user: {
+        id: "missing-user",
+        role: "learner",
+        status: "active",
+        discordId: "discord-user",
+      },
+      expires: "2099-01-01T00:00:00.000Z",
+    });
+    vi.mocked(fetch).mockResolvedValue(
+      Response.json({ detail: "Authenticated user not found." }, { status: 401 }),
+    );
+
+    await expect(requireSession()).rejects.toThrow("redirect");
+
+    expect(redirect).toHaveBeenCalledWith("/?error=SessionExpired");
   });
 });

@@ -71,6 +71,17 @@ export async function requireSession() {
   if (session.user.status === "deactivated") {
     redirect("/?error=AccountDeactivated");
   }
+  try {
+    await backendFetch("/api/profile", {}, session.backendToken);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      redirect("/?error=SessionExpired");
+    }
+    if (error instanceof ApiError && error.status === 403) {
+      redirect("/?error=AccountDeactivated");
+    }
+    throw error;
+  }
   return session;
 }
 
