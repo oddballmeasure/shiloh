@@ -75,9 +75,9 @@ Services:
 
 ## Production
 
-Use the separate Caddy-backed production stack rather than the local-development
-`docker-compose.yml`. The complete host setup, Discord callback configuration,
-and rollback procedure are in
+Use the separate Nginx and Cloudflare-backed production stack rather than the
+local-development `docker-compose.yml`. The complete host setup, Discord
+callback configuration, and rollback procedure are in
 [docs/production.md](docs/production.md).
 
 ## Super Admin Bootstrap

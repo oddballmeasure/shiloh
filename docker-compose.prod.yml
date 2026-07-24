@@ -61,6 +61,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Next.js otherwise inherits Docker's container hostname and binds only
+      # to that address, preventing the local health check from reaching it.
+      HOSTNAME: 0.0.0.0
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_DISCORD_ID: ${AUTH_DISCORD_ID}
       AUTH_DISCORD_SECRET: ${AUTH_DISCORD_SECRET}
@@ -71,8 +74,10 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - edge
+      - proxy
       - app
+    ports:
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 15s
@@ -81,33 +86,10 @@ services:
       start_period: 30s
     logging: *default-logging
 
-  caddy:
-    image: caddy:2.8-alpine
-    restart: unless-stopped
-    environment:
-      DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL}
-    depends_on:
-      frontend:
-        condition: service_healthy
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    networks:
-      - edge
-    logging: *default-logging
-
 volumes:
   mongodb-data:
-  caddy-data:
-  caddy-config:
 
 networks:
-  edge:
+  proxy:
   app:
     internal: true
