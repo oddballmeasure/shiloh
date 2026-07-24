@@ -134,6 +134,7 @@ export interface Assignment {
   target_level: KoreanLevel;
   status: AssignmentStatus;
   source_text: string | null;
+  study_context: string | null;
   source_file: AssignmentSourceFile | null;
   source_extraction_status: ExtractionStatus;
   source_extraction_method: ExtractionMethod | null;

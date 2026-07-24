@@ -575,6 +575,60 @@ def test_assignment_generation_failures_are_tracked_on_the_assignment() -> None:
         )
 
 
+def test_failed_ai_assignment_can_be_retried_without_losing_failure_history() -> None:
+    with make_client(ai_service=FailingAIService()) as client:
+        learner = sync_user(client, "discord-learner", "Learner")
+        token = learner["access_token"]
+
+        created = client.post(
+            "/api/assignments/generate",
+            headers=auth_headers(token),
+            json={
+                "title": "Retryable Generation",
+                "target_level": "beginner",
+                "source_text": "안녕하세요. 만나서 반갑습니다.",
+                "study_context": "Practice greetings.",
+            },
+        )
+        assert created.status_code == 201, created.text
+        assignment_id = created.json()["id"]
+
+        client.app.state.ai_service = FakeAIService()
+        retried = client.post(
+            f"/api/assignments/{assignment_id}/retry",
+            headers=auth_headers(token),
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["status"] == "processing"
+
+        detail = client.get(
+            f"/api/assignments/{assignment_id}", headers=auth_headers(token)
+        )
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["status"] == "ready"
+        assert detail.json()["generation_error"] is None
+        assert len(detail.json()["generation_failures"]) == 1
+        assert detail.json()["generation_failures"][0]["stage"] == "generation"
+
+        manual = create_manual_assignment(client, token)
+        manual_retry = client.post(
+            f"/api/assignments/{manual['id']}/retry",
+            headers=auth_headers(token),
+        )
+        assert manual_retry.status_code == 400
+        assert (
+            manual_retry.json()["detail"]
+            == "Only AI-generated assignments can be retried."
+        )
+
+        ready_retry = client.post(
+            f"/api/assignments/{assignment_id}/retry",
+            headers=auth_headers(token),
+        )
+        assert ready_retry.status_code == 400
+        assert ready_retry.json()["detail"] == "Only failed assignments can be retried."
+
+
 def test_super_admin_can_promote_admin_and_admin_can_deactivate_users() -> None:
     with make_client() as client:
         learner = sync_user(client, "discord-learner", "Learner")

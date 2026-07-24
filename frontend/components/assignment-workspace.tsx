@@ -35,6 +35,7 @@ export function AssignmentWorkspace({ assignment }: { assignment: Assignment }) 
   const [statusError, setStatusError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const isCompleted = currentAssignment.status === "completed";
   const description = assignmentDescription(currentAssignment);
 
@@ -144,6 +145,24 @@ export function AssignmentWorkspace({ assignment }: { assignment: Assignment }) 
     }
   }
 
+  async function retryGeneration() {
+    setRetrying(true);
+    setError(null);
+    setStatusError(null);
+    try {
+      const retried = await fetchJson<Assignment>(
+        `/api/proxy/api/assignments/${currentAssignment.id}/retry`,
+        { method: "POST" },
+      );
+      setCurrentAssignment(retried);
+      setAttempt(retried.latest_attempt);
+    } catch (retryError) {
+      setError(getErrorMessage(retryError, "Unable to retry assignment generation."));
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   if (currentAssignment.status !== "ready" && currentAssignment.status !== "completed") {
     return (
       <section className="panel">
@@ -190,6 +209,12 @@ export function AssignmentWorkspace({ assignment }: { assignment: Assignment }) 
             ))}
           </div>
         ) : null}
+        {currentAssignment.status === "failed" ? (
+          <button className="primary-button" disabled={retrying} onClick={retryGeneration}>
+            {retrying ? "Retrying..." : "Retry Generation"}
+          </button>
+        ) : null}
+        {error ? <InlineMessage>{error}</InlineMessage> : null}
         {statusError ? <MessageBanner>{statusError}</MessageBanner> : null}
       </section>
     );

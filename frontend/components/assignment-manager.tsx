@@ -173,6 +173,7 @@ export function AssignmentManager({
   const [creatingPdf, setCreatingPdf] = useState(false);
   const [creatingManual, setCreatingManual] = useState(false);
   const [deletingAssignmentId, setDeletingAssignmentId] = useState<string | null>(null);
+  const [retryingAssignmentId, setRetryingAssignmentId] = useState<string | null>(null);
   const [pdfInputKey, setPdfInputKey] = useState(0);
 
   const hasProcessingAssignments = assignments.some((assignment) => assignment.status === "processing");
@@ -339,6 +340,23 @@ export function AssignmentManager({
       setListError(getErrorMessage(error, "Unable to delete the assignment."));
     } finally {
       setDeletingAssignmentId(null);
+    }
+  }
+
+  async function retryAssignment(id: string) {
+    setRetryingAssignmentId(id);
+    setListError(null);
+    try {
+      const retried = await fetchJson<Assignment>(`/api/proxy/api/assignments/${id}/retry`, {
+        method: "POST",
+      });
+      setAssignments((current) =>
+        current.map((assignment) => (assignment.id === id ? retried : assignment)),
+      );
+    } catch (error) {
+      setListError(getErrorMessage(error, "Unable to retry assignment generation."));
+    } finally {
+      setRetryingAssignmentId(null);
     }
   }
 
@@ -699,6 +717,15 @@ export function AssignmentManager({
                     <Link className="ghost-button" href={`/assignments/${assignment.id}`}>
                       {assignment.status === "completed" ? "View Result" : "Open"}
                     </Link>
+                    {assignment.status === "failed" && assignment.source !== "manual" ? (
+                      <button
+                        className="primary-button"
+                        disabled={retryingAssignmentId === assignment.id}
+                        onClick={() => retryAssignment(assignment.id)}
+                      >
+                        {retryingAssignmentId === assignment.id ? "Retrying..." : "Retry"}
+                      </button>
+                    ) : null}
                     <button
                       className="danger-button"
                       disabled={deletingAssignmentId === assignment.id}

@@ -372,6 +372,7 @@ class AssignmentResponse(APIModel):
     target_level: KoreanLevel
     status: AssignmentStatus
     source_text: str | None = None
+    study_context: str | None = None
     source_file: AssignmentSourceFile | None = None
     source_extraction_status: ExtractionStatus
     source_extraction_method: ExtractionMethod | None = None

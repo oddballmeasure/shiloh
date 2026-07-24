@@ -177,7 +177,6 @@ async def _process_generated_text_assignment(
                     "source_extraction_method": ExtractionMethod.text.value,
                     "generation_error": None,
                     "generation_failed_at": None,
-                    "generation_failures": [],
                     "completed_at": None,
                     "updated_at": now,
                 }
@@ -255,7 +254,6 @@ async def _process_generated_pdf_assignment(app, assignment_id: str) -> None:
                     "source_extraction_summary": extracted.summary,
                     "generation_error": None,
                     "generation_failed_at": None,
-                    "generation_failures": [],
                     "completed_at": None,
                     "updated_at": utcnow(),
                 }
@@ -325,6 +323,7 @@ async def create_manual_assignment(
         "target_level": str(payload.target_level),
         "status": AssignmentStatus.ready.value,
         "source_text": None,
+        "study_context": None,
         "source_file": None,
         "source_extraction_status": ExtractionStatus.ready.value,
         "source_extraction_method": None,
@@ -363,6 +362,7 @@ async def generate_assignment_from_text(
         "target_level": str(payload.target_level),
         "status": AssignmentStatus.processing.value,
         "source_text": payload.source_text,
+        "study_context": payload.study_context,
         "source_file": None,
         "source_extraction_status": ExtractionStatus.processing.value,
         "source_extraction_method": ExtractionMethod.text.value,
@@ -433,6 +433,7 @@ async def generate_assignment_from_pdf(
         "target_level": target_level.value,
         "status": AssignmentStatus.processing.value,
         "source_text": study_context,
+        "study_context": study_context,
         "source_file": {
             "id": stored_file.id,
             "filename": stored_file.filename,
@@ -557,6 +558,73 @@ async def delete_assignment(
 ) -> None:
     assignment = await _get_owned_assignment(db, user["id"], assignment_id)
     await _delete_assignment_resources(db, file_storage, assignment)
+
+
+@router.post("/{assignment_id}/retry", response_model=AssignmentResponse)
+async def retry_generated_assignment(
+    request: Request,
+    assignment_id: str,
+    background_tasks: BackgroundTasks,
+    user=Depends(get_current_user),
+    db=Depends(get_database),
+) -> AssignmentResponse:
+    assignment = await _get_owned_assignment(db, user["id"], assignment_id)
+    source = assignment["source"]
+    if source not in {AssignmentSource.ai_text.value, AssignmentSource.ai_pdf.value}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only AI-generated assignments can be retried.",
+        )
+    if assignment["status"] != AssignmentStatus.failed.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only failed assignments can be retried.",
+        )
+    if source == AssignmentSource.ai_text.value and not assignment.get("source_text"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The original source text is unavailable for retry.",
+        )
+
+    now = utcnow()
+    await db.assignments.update_one(
+        {"_id": to_object_id(assignment_id), "owner_id": user["id"]},
+        {
+            "$set": {
+                "status": AssignmentStatus.processing.value,
+                "instructions": None,
+                "questions": [],
+                "source_extraction_status": ExtractionStatus.processing.value,
+                "generation_error": None,
+                "generation_failed_at": None,
+                "completed_at": None,
+                "updated_at": now,
+            }
+        },
+    )
+    updated = serialize_document(
+        await db.assignments.find_one({"_id": to_object_id(assignment_id)})
+    )
+    if source == AssignmentSource.ai_text.value:
+        background_tasks.add_task(
+            _process_generated_text_assignment,
+            request.app,
+            assignment_id,
+            AssignmentGenerateTextRequest(
+                title=assignment["title"],
+                target_level=assignment["target_level"],
+                source_text=assignment["source_text"],
+                study_context=assignment.get("study_context"),
+            ),
+        )
+    else:
+        background_tasks.add_task(
+            _process_generated_pdf_assignment,
+            request.app,
+            assignment_id,
+        )
+    attempts = await _assignment_attempts(db, assignment_id, user["id"])
+    return _assignment_response(updated, attempts[0] if attempts else None, attempts)
 
 
 @router.post("/{assignment_id}/redo", response_model=AssignmentResponse)

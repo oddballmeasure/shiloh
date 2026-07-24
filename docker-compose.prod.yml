@@ -45,6 +45,7 @@ services:
       mongodb:
         condition: service_healthy
     networks:
+      - egress
       - app
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
@@ -91,5 +92,6 @@ volumes:
 
 networks:
   proxy:
+  egress:
   app:
     internal: true
